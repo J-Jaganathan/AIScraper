@@ -1,0 +1,23 @@
+# robots.txt for Streamlit AI Web Scraper
+# Purpose: Control bot behavior ethically and guide search engines
+
+# Applies to all bots
+User-agent: *
+
+
+# Disallow sensitive or private areas
+Disallow: /secrets/
+Disallow: /config/
+Disallow: /.streamlit/
+Disallow: /.devcontainer/
+Disallow: /utils/
+Disallow: /Dashboard
+Disallow: /dashboard
+Disallow: /streamlit_app.py
+
+# Allow only Login and Signup pages
+Allow: /Login
+Allow: /Signup
+
+# Point to sitemap
+Sitemap: https://aiscraperr.streamlit.app/sitemap.xml

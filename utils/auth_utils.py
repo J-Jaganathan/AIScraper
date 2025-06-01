@@ -11,7 +11,7 @@ load_dotenv()
 class AuthManager:
     def __init__(self):
         # MongoDB connection
-        mongo_uri = st.secrets.get("MONGODB_URI")
+        mongo_uri = st.secrets["MONGODB_URI"] if "MONGODB_URI" in st.secrets else os.getenv("MONGODB_URI")
         if not mongo_uri:
             st.error("MongoDB URI not found in Streamlit secrets!")
             raise ValueError("Missing MONGODB_URI in Streamlit secrets.")

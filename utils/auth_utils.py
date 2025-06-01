@@ -15,7 +15,7 @@ class AuthManager:
         st.write("DEBUG: env MONGODB_URI = ", os.getenv("MONGODB_URI"))
 
         try:
-            mongo_uri = st.secrets["MONGODB_URI"]
+            mongo_uri = st.secrets["keys"]["MONGODB_URI"]
         except Exception:
             mongo_uri = os.getenv("MONGODB_URI")
 

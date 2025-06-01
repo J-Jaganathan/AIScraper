@@ -11,7 +11,10 @@ load_dotenv()
 class AuthManager:
     def __init__(self):
         # MongoDB connection
-        mongo_uri = st.secrets("MONGODB_URI")
+        mongo_uri = st.secrets.get("MONGODB_URI")
+        if not mongo_uri:
+            st.error("MongoDB URI not found in Streamlit secrets!")
+            raise ValueError("Missing MONGODB_URI in Streamlit secrets.")
         self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000)
         self.client.admin.command('ping')
         self.db = self.client.ai_scraper

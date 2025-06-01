@@ -11,8 +11,9 @@ load_dotenv()
 class AuthManager:
     def __init__(self):
         # MongoDB connection
-        mongo_uri = os.getenv("MONGODB_URI") or st.secrets.get("MONGODB_URI", "mongodb://localhost:27017/")
-        self.client = MongoClient(mongo_uri)
+        mongo_uri = st.secrets("MONGODB_URI")
+        self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000)
+        self.client.admin.command('ping')
         self.db = self.client.ai_scraper
         self.users_collection = self.db.users
         self.sessions_collection = self.db.sessions

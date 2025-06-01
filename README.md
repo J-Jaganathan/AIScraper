@@ -7,8 +7,6 @@ A powerful AI-driven web scraping tool built with Streamlit and Playwright, feat
 - 🤖 AI-powered natural language scraping prompts
 - 🔐 User authentication with MongoDB
 - 📊 Data visualization and export (CSV/Excel)
-- 🚦 Rate limiting (5 scrapes per user per day)
-- 👑 Admin panel with unlimited scraping
 - 🕷️ Stealth scraping with anti-detection
 - 📱 Support for major e-commerce sites (Flipkart, Amazon)
 - 🤖 robots.txt compliance checking

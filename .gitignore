@@ -1,5 +1,16 @@
+# Environment variables and secrets
 utils/.env
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 .streamlit/secrets.toml
+
+# Data and logs
+data/scrape_log.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -31,8 +42,6 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -87,14 +96,7 @@ ipython_config.py
 # pyenv
 .python-version
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+# PEP 582
 __pypackages__/
 
 # Celery stuff
@@ -103,15 +105,6 @@ celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
 # Spyder project settings
 .spyderproject
@@ -130,10 +123,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-
-# Streamlit secrets and scrape logs
-.streamlit/secrets.toml
-data/scrape_log.json
 
 # VS Code
 .vscode/

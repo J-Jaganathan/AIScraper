@@ -56,13 +56,6 @@ streamlit run app.py
 2. Enter natural language scraping prompts
 3. View results with interactive visualizations
 4. Export data as CSV or Excel
-5. Limited to 5 scrapes per day
-
-### For Admins
-1. Login with admin credentials
-2. Unlimited scraping access
-3. Admin panel to monitor all users and scrapes
-4. View usage analytics and statistics
 
 ### Example Prompts
 - "Scrape top 50 mobiles from Flipkart with price, rating, and discount"
@@ -70,12 +63,6 @@ streamlit run app.py
 - "Extract government notifications from ministry portal"
 - "Scrape product data from e-commerce website https://example.com"
 
-## Rate Limiting
-
-- Regular users: 5 scrapes per day
-- Admin users: Unlimited
-- Counts reset at midnight
-- Tracked in `data/scrape_log.json`
 
 ## File Structure
 ```

@@ -1,13 +1,19 @@
 services:
   - type: web
-    name: ai-playwright-backend
-    env: python
+    name: ai-web-scraper-api
+    runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt && python -m playwright install && chmod +x start.sh
-    startCommand: bash start.sh
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: |
+      uvicorn main:app --host 0.0.0.0 --port 10000
     envVars:
-      - key: PLAYWRIGHT_BROWSERS_PATH
-        value: /root/.cache/ms-playwright
       - key: PYTHON_VERSION
-        value: 3.10
+        value: "3.11"
+      - key: PORT
+        value: "10000"
+      - key: ENVIRONMENT
+        value: "production"
     autoDeploy: true
+    healthCheckPath: /health

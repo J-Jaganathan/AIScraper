@@ -11,9 +11,6 @@ load_dotenv()
 class AuthManager:
     def __init__(self):
         # MongoDB connection
-        st.write("DEBUG: st.secrets keys = ", list(st.secrets.keys()))
-        st.write("DEBUG: env MONGODB_URI = ", os.getenv("MONGODB_URI"))
-
         try:
             mongo_uri = st.secrets["MONGODB_URI"]
         except Exception:

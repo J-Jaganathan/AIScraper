@@ -8,13 +8,69 @@ st.set_page_config(
     page_title="AI Web Scraper",
     page_icon="🕷️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
+
+# COMPLETE SIDEBAR REMOVAL CSS - Place this immediately after st.set_page_config
+st.markdown("""
+    <style>
+    /* Hide sidebar completely */
+    section[data-testid="stSidebar"] {
+        display: none !important;
+    }
+    
+    /* Hide sidebar navigation */
+    [data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
+    /* Hide collapsed sidebar control */
+    button[data-testid="collapsedControl"] {
+        display: none !important;
+    }
+    
+    /* Hide hamburger menu */
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+    
+    /* Ensure main content takes full width */
+    .main .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: none !important;
+    }
+    
+    /* Hide any potential sidebar remnants */
+    .css-1d391kg, .css-1lcbmhc, .css-17lntkn, .css-1outpf7 {
+        display: none !important;
+    }
+    
+    /* Additional cleanup for sidebar elements */
+    [data-testid="stSidebar"] > div {
+        display: none !important;
+    }
+    
+    /* Force hide any sidebar with more specific selectors */
+    section[data-testid="stSidebar"], 
+    section[data-testid="stSidebar"] *,
+    .css-1lcbmhc,
+    .css-1d391kg {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Initialize session state
 init_session_state()
 
-# Custom CSS
+# Custom CSS for styling
 st.markdown("""
 <style>
     .main-header {
@@ -44,22 +100,6 @@ st.markdown("""
         color: white;
         border-radius: 15px;
         margin: 2rem 0;
-    }
-    
-    .stats-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        text-align: center;
-        margin: 1rem 0;
-    }
-    
-    .sidebar-info {
-        background: #f0f2f6;
-        padding: 1rem;
-        border-radius: 10px;
-        margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -136,53 +176,6 @@ def show_landing_page():
         st.button("👨‍💼 Admin Login", use_container_width=True, disabled=True, 
                  help="Contact administrator for admin access")
 
-def show_navigation():
-    """Show navigation sidebar for authenticated users"""
-    
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"**Welcome, {st.session_state.user['username']}!**")
-    
-    # Navigation menu
-    menu_options = ["🏠 Dashboard", "📊 My Scrapes", "⚙️ Settings"]
-    
-    if st.session_state.user.get('is_admin', False):
-        menu_options.extend(["👥 All Users", "📈 All Scrapes"])
-    
-    selected = st.sidebar.selectbox("Navigate to:", menu_options)
-    
-    # Handle navigation
-    if selected == "🏠 Dashboard":
-        st.session_state.current_page = "dashboard"
-    elif selected == "📊 My Scrapes":
-        st.session_state.current_page = "my_scrapes"
-    elif selected == "⚙️ Settings":
-        st.session_state.current_page = "settings"
-    elif selected == "👥 All Users":
-        st.session_state.current_page = "admin_users"
-    elif selected == "📈 All Scrapes":
-        st.session_state.current_page = "admin_scrapes"
-    
-    # Logout button
-    st.sidebar.markdown("---")
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
-        logout_user()
-        st.session_state.show_page = "landing"
-        st.rerun()
-    
-    # User info
-    st.sidebar.markdown("""
-    <div class="sidebar-info">
-        <small>
-        🔧 <b>Your Account:</b><br>
-        Email: {}<br>
-        Role: {}<br>
-        </small>
-    </div>
-    """.format(
-        st.session_state.user['email'],
-        "Admin" if st.session_state.user.get('is_admin') else "User"
-    ), unsafe_allow_html=True)
-
 def main():
     """Main application logic"""
     
@@ -190,33 +183,13 @@ def main():
     if 'show_page' not in st.session_state:
         st.session_state.show_page = "landing"
     
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = "dashboard"
-    
     # Check authentication
     is_authenticated = check_authentication()
     
     if is_authenticated:
-        # Show navigation for authenticated users
-        show_navigation()
-        
-        # Route to appropriate page
-        if st.session_state.current_page == "dashboard":
-            from pages.Dashboard import show_dashboard
-            show_dashboard()
-        elif st.session_state.current_page == "my_scrapes":
-            from pages.Dashboard import show_my_scrapes
-            show_my_scrapes()
-        elif st.session_state.current_page == "settings":
-            from pages.Dashboard import show_settings
-            show_settings()
-        elif st.session_state.current_page == "admin_users" and st.session_state.user.get('is_admin'):
-            from pages.Dashboard import show_admin_users
-            show_admin_users()
-        elif st.session_state.current_page == "admin_scrapes" and st.session_state.user.get('is_admin'):
-            from pages.Dashboard import show_admin_scrapes
-            show_admin_scrapes()
-    
+        # Route to dashboard for authenticated users
+        from pages.Dashboard import main as dashboard_main
+        dashboard_main()
     else:
         # Handle non-authenticated pages
         if st.session_state.show_page == "login":

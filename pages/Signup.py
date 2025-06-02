@@ -1,6 +1,11 @@
 import streamlit as st
 import re
 from utils.auth_utils import AuthManager
+from utils.ui_utils import hide_streamlit_sidebar, apply_custom_styling
+
+# Hide sidebar immediately when page loads
+hide_streamlit_sidebar()
+apply_custom_styling()
 
 def validate_email(email):
     """Validate email format"""
@@ -23,6 +28,10 @@ def validate_password(password):
 def show_signup_page():
     """Display signup page"""
     
+    # Initialize session state for signup success
+    if 'signup_success' not in st.session_state:
+        st.session_state.signup_success = False
+    
     st.markdown("""
     <div style="text-align: center; padding: 2rem 0;">
         <h1>📝 Create Your Account</h1>
@@ -34,14 +43,33 @@ def show_signup_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        with st.container():
-            st.markdown("""
-            <div style="background: white; padding: 2rem; border-radius: 15px; 
-                        box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin: 2rem 0;">
-            """, unsafe_allow_html=True)
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        
+        # Check if signup was successful
+        if st.session_state.signup_success:
+            st.success("🎉 Account created successfully!")
+            st.balloons()
             
-            # Signup form
-            with st.form("signup_form", clear_on_submit=False):
+            # Create navigation buttons after success
+            st.markdown("### What would you like to do next?")
+            
+            col_login, col_home = st.columns(2)
+            
+            with col_login:
+                if st.button("🔐 Go to Login", use_container_width=True, type="primary"):
+                    st.session_state.signup_success = False  # Reset success state
+                    st.session_state.show_page = "login"
+                    st.rerun()
+            
+            with col_home:
+                if st.button("🏠 Back to Home", use_container_width=True):
+                    st.session_state.signup_success = False  # Reset success state
+                    st.session_state.show_page = "landing"
+                    st.rerun()
+                    
+        else:
+            # Show signup form only if not successful
+            with st.form("signup_form", clear_on_submit=True):
                 st.markdown("### Create Your Account")
                 
                 username = st.text_input(
@@ -52,8 +80,7 @@ def show_signup_page():
                 
                 email = st.text_input(
                     "Email Address",
-                    placeholder="Enter your email address",
-                    help="We'll use this for important notifications"
+                    placeholder="Enter your email address"
                 )
                 
                 password = st.text_input(
@@ -71,8 +98,7 @@ def show_signup_page():
                 
                 # Terms and conditions
                 terms_accepted = st.checkbox(
-                    "I agree to the Terms of Service and Privacy Policy",
-                    help="Required to create an account"
+                    "I agree to the Terms of Service and Privacy Policy"
                 )
                 
                 # Submit button
@@ -114,69 +140,65 @@ def show_signup_page():
                         auth_manager = AuthManager()
                         
                         with st.spinner("Creating your account..."):
-                            result = auth_manager.create_user(
-                                username.strip(),
-                                email.strip().lower(),
-                                password
-                            )
-                        
-                        if result["success"]:
-                            st.success("Account created successfully! Please login to continue.")
-                            st.balloons()
-                            
-                            # Auto-redirect to login after a short delay
-                            if st.button("Continue to Login →"):
-                                st.session_state.show_page = "login"
-                                st.rerun()
-                        else:
-                            st.error(result["message"])
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-            # Additional options
-            st.markdown("---")
-            
-            col_a, col_b = st.columns(2)
-            
-            with col_a:
-                if st.button("🔐 Already have an account? Login", use_container_width=True):
-                    st.session_state.show_page = "login"
-                    st.rerun()
-            
-            with col_b:
-                if st.button("🏠 Back to Home", use_container_width=True):
-                    st.session_state.show_page = "landing"
-                    st.rerun()
+                            try:
+                                result = auth_manager.create_user(
+                                    username.strip(),
+                                    email.strip().lower(),
+                                    password
+                                )
+                                
+                                if result["success"]:
+                                    st.session_state.signup_success = True
+                                    st.rerun()  # Rerun to show success state
+                                else:
+                                    st.error(result["message"])
+                            except Exception as e:
+                                st.error(f"An error occurred while creating your account: {str(e)}")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    # Benefits section
-    st.markdown("---")
-    st.markdown("### 🎯 What You Get With Your Account")
-    
-    benefits_col1, benefits_col2 = st.columns(2)
-    
-    with benefits_col1:
-        st.markdown("""
-        **🚀 Core Features:**
-        - Unlimited web scraping
-        - AI-powered prompt parsing
-        - Stealth mode scraping
-        - Multiple export formats
+    # Show navigation buttons only if signup is not successful
+    if not st.session_state.signup_success:
+        # Navigation buttons
+        st.markdown("---")
+        
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            if st.button("🔐 Already have an account? Login", use_container_width=True):
+                st.session_state.show_page = "login"
+                st.rerun()
+        
+        with col_b:
+            if st.button("🏠 Back to Home", use_container_width=True):
+                st.session_state.show_page = "landing"
+                st.rerun()
+        
+        # Benefits section
+        st.markdown("---")
+        st.markdown("### 🎯 What You Get With Your Account")
+        
+        benefits_col1, benefits_col2 = st.columns(2)
+        
+        with benefits_col1:
+            st.markdown("""
+            **🚀 Core Features:**
+            - Unlimited web scraping
+            - AI-powered prompt parsing
+            - Stealth mode scraping
+            - Multiple export formats
+            """)
+        
+        with benefits_col2:
+            st.markdown("""
+            **📊 Data Management:**
+            - Scrape history tracking
+            - Data visualization charts
+            - CSV & Excel downloads
+            - Personal dashboard
+            """)
+        
+        # Security notice
+        st.info("""
+        🔒 **Your Privacy & Security:** All passwords are encrypted and your data is stored securely.
         """)
-    
-    with benefits_col2:
-        st.markdown("""
-        **📊 Data Management:**
-        - Scrape history tracking
-        - Data visualization charts
-        - CSV & Excel downloads
-        - Personal dashboard
-        """)
-    
-    # Security notice
-    st.info("""
-    🔒 **Your Privacy & Security:**
-    - All passwords are encrypted using industry-standard bcrypt
-    - Your data is stored securely in MongoDB
-    - We never share your personal information
-    - You can delete your account anytime
-    """)

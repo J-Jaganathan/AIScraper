@@ -11,17 +11,148 @@ from utils.robots_utils import is_allowed_to_scrape
 import plotly.express as px
 import plotly.graph_objects as go
 import re
+from utils.ui_utils import hide_streamlit_sidebar, apply_custom_styling
+
+# Hide sidebar immediately when page loads
+hide_streamlit_sidebar()
+apply_custom_styling()
+# CSS for the logout button and header
+st.markdown("""
+<style>
+    /* Top header bar with logout button */
+    .header-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 2rem;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .header-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin: 0;
+    }
+    
+    .logout-btn {
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        color: white;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    
+    .logout-btn:hover {
+        background: rgba(255,255,255,0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    /* Navigation pills */
+    .nav-pills {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 10px;
+    }
+    
+    .nav-pill {
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        border: none;
+        background: white;
+        color: #666;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+    
+    .nav-pill.active {
+        background: #667eea;
+        color: white;
+    }
+    
+    .nav-pill:hover {
+        background: #667eea;
+        color: white;
+        transform: translateY(-2px);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+def show_header_with_logout():
+    """Show header bar with logout button"""
+    
+    # Create header with logout button
+    header_html = f"""
+    <div class="header-bar">
+        <div>
+            <h2 class="header-title">🕷️ AI Web Scraper Dashboard</h2>
+            <p style="margin: 0; opacity: 0.9;">Welcome back, <strong>{st.session_state.user['username']}</strong>!</p>
+        </div>
+        <div>
+            <span style="margin-right: 1rem; opacity: 0.8;">
+                {st.session_state.user.get('email', '')}
+            </span>
+        </div>
+    </div>
+    """
+    
+    st.markdown(header_html, unsafe_allow_html=True)
+    
+    # Logout button in a separate container for better control
+    col1, col2, col3 = st.columns([6, 1, 1])
+    
+    with col3:
+        if st.button("🚪 Logout", key="logout_btn", help="Return to home page"):
+            # Clear session state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            
+            # Set page to landing
+            st.session_state.show_page = "landing"
+            st.rerun()
+
+def show_navigation_pills():
+    """Show navigation as horizontal pills"""
+    
+    # Navigation options
+    nav_options = {
+        'Dashboard': 'dashboard',
+        'Scrape History': 'history'
+    }
+    
+    # Add admin panel if user is admin
+    if st.session_state.get('user', {}).get('is_admin', False):
+        nav_options['Admin Panel'] = 'admin'
+    
+    # Create navigation pills
+    cols = st.columns(len(nav_options))
+    
+    for i, (page_name, page_key) in enumerate(nav_options.items()):
+        with cols[i]:
+            if st.button(
+                page_name, 
+                key=f"nav_{page_key}",
+                use_container_width=True,
+                type="primary" if st.session_state.get('page', 'dashboard') == page_key else "secondary"
+            ):
+                st.session_state.page = page_key
+                st.rerun()
 
 def show_dashboard():
     """Main dashboard for authenticated users"""
     require_auth()
-    
-    st.markdown(f"""
-    <div style="text-align: center; padding: 1rem 0;">
-        <h1>🕷️ AI Web Scraper Dashboard</h1>
-        <p>Welcome back, <strong>{st.session_state.user['username']}</strong>! Ready to scrape some data?</p>
-    </div>
-    """, unsafe_allow_html=True)
     
     # Quick stats
     auth_manager = AuthManager()
@@ -186,7 +317,7 @@ def display_scraping_results(results, prompt, website):
     st.markdown("### 📋 Data Preview")
     st.dataframe(df, use_container_width=True, height=400)
     
-    # Visualizations
+    # Visualizations (rest of the function remains the same)
     if len(df) > 1 and any(col in df.columns for col in ['price', 'rating', 'discount']):
         st.markdown("### 📈 Data Visualization")
         
@@ -221,34 +352,6 @@ def display_scraping_results(results, prompt, website):
                         st.plotly_chart(fig, use_container_width=True)
                 except:
                     st.info("Could not generate rating chart")
-    
-    # Additional visualizations for other numeric columns
-    numeric_columns = df.select_dtypes(include=['number']).columns.tolist()
-    if numeric_columns:
-        st.markdown("### 📊 Additional Insights")
-        
-        if len(numeric_columns) >= 2:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                try:
-                    # Correlation heatmap
-                    corr_matrix = df[numeric_columns].corr()
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', ax=ax)
-                    ax.set_title('Correlation Matrix')
-                    st.pyplot(fig)
-                    plt.close()
-                except:
-                    st.info("Could not generate correlation matrix")
-            
-            with col2:
-                try:
-                    # Box plot for first numeric column
-                    fig = px.box(y=df[numeric_columns[0]], title=f"{numeric_columns[0]} Distribution")
-                    st.plotly_chart(fig, use_container_width=True)
-                except:
-                    st.info("Could not generate box plot")
 
 def show_scrape_history():
     """Display user's scraping history"""
@@ -414,30 +517,17 @@ def show_admin_panel():
 # Main dashboard logic
 def main():
     """Main function to handle dashboard navigation"""
+    require_auth()
+    
+    # Show header with logout button
+    show_header_with_logout()
+    
+    # Show navigation pills
+    show_navigation_pills()
+    
+    # Initialize page state
     if 'page' not in st.session_state:
         st.session_state.page = 'dashboard'
-    
-    # Sidebar navigation
-    st.sidebar.markdown("### 🕷️ Navigation")
-    
-    pages = {
-        'Dashboard': 'dashboard',
-        'Scrape History': 'history'
-    }
-    
-    # Add admin panel if user is admin
-    if st.session_state.get('user', {}).get('role') == 'admin':
-        pages['Admin Panel'] = 'admin'
-    
-    # Navigation buttons
-    for page_name, page_key in pages.items():
-        if st.sidebar.button(page_name, use_container_width=True):
-            st.session_state.page = page_key
-    
-    # Logout button
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
-        st.session_state.clear()
-        st.rerun()
     
     # Show selected page
     if st.session_state.page == 'dashboard':

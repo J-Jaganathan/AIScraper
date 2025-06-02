@@ -1,6 +1,7 @@
 # === Streamlit UI ===
 streamlit==1.28.1
 streamlit-authenticator==0.2.3
+rich==13.9.4  # Required by Streamlit (rich < 14)
 
 # === Core AI / Langchain Support ===
 langchain==0.1.0
@@ -16,6 +17,7 @@ fake-useragent==1.4.0
 selenium-stealth==1.0.6
 python-dateutil==2.8.2
 urllib3==2.0.7
+
 # === MongoDB ===
 pymongo==4.6.0
 bcrypt==4.1.2
@@ -30,8 +32,6 @@ seaborn==0.13.0
 fastapi==0.104.1
 uvicorn==0.29.0
 pydantic==2.5.0
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 httpx==0.25.2
 python-jose[cryptography]==3.3.0

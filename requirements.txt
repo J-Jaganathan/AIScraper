@@ -17,20 +17,21 @@ fake-useragent==1.4.0
 selenium-stealth==1.0.6
 python-dateutil==2.8.2
 urllib3==2.0.7
+playwright==1.40.0  # Added for headless scraping
 
 # === MongoDB ===
 pymongo==4.6.0
-bcrypt==4.1.2
+bcrypt==4.1.0  
 
 # === Plotting / Data Analysis ===
-pandas==2.0.3
+pandas==2.1.0  
 plotly==5.17.0
 matplotlib==3.8.2
 seaborn==0.13.0
 
 # === FastAPI Backend (Render Deployment) ===
 fastapi==0.104.1
-uvicorn==0.29.0
+uvicorn[standard]==0.24.0  
 pydantic==2.5.0
 python-multipart==0.0.6
 httpx==0.25.2

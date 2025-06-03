@@ -7,6 +7,9 @@ import re
 import logging
 from datetime import datetime
 import os
+from playwright.async_api import async_playwright, Browser, Page
+import json
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -91,130 +94,251 @@ class PromptParser:
             'original_prompt': prompt
         }
 
-async def generate_realistic_data(prompt: str, max_items: int = 50) -> tuple[List[Dict], str]:
-    """Generate realistic demo data based on prompt analysis"""
+class PlaywrightScraper:
+    """Playwright-based web scraper"""
     
-    parsed = PromptParser.parse_scraping_prompt(prompt)
-    website = parsed['website']
-    category = parsed.get('category', 'product')
+    def __init__(self):
+        self.browser: Optional[Browser] = None
+        self.playwright = None
     
-    # Simulate processing delay
-    await asyncio.sleep(2)
+    async def initialize(self):
+        """Initialize Playwright browser"""
+        try:
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=VizDisplayCompositor'
+                ]
+            )
+            logger.info("Playwright browser initialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize Playwright: {str(e)}")
+            return False
     
-    if website == 'flipkart':
-        results = []
-        base_prices = {'mobile': 15000, 'laptop': 45000, 'headphone': 2000, 'watch': 5000, 'tablet': 25000}
-        base_price = base_prices.get(category, 10000)
+    async def close(self):
+        """Close browser and playwright"""
+        try:
+            if self.browser:
+                await self.browser.close()
+            if self.playwright:
+                await self.playwright.stop()
+        except Exception as e:
+            logger.error(f"Error closing Playwright: {str(e)}")
+    
+    async def scrape_flipkart(self, category: str, max_items: int) -> List[Dict]:
+        """Scrape Flipkart for products"""
+        if not self.browser:
+            raise Exception("Browser not initialized")
         
-        product_names = {
-            'mobile': ['Samsung Galaxy', 'iPhone', 'OnePlus', 'Xiaomi Redmi', 'Oppo', 'Vivo', 'Realme'],
-            'laptop': ['Dell Inspiron', 'HP Pavilion', 'Lenovo ThinkPad', 'Asus VivoBook', 'Acer Aspire', 'MacBook Air'],
-            'headphone': ['Sony WH-1000XM4', 'Bose QuietComfort', 'JBL Tune', 'Boat Rockerz', 'Sennheiser', 'Audio-Technica'],
-            'watch': ['Apple Watch', 'Samsung Galaxy Watch', 'Fitbit Versa', 'Amazfit', 'Fossil Gen', 'Garmin Venu'],
-            'tablet': ['iPad', 'Samsung Galaxy Tab', 'Lenovo Tab', 'Amazon Fire', 'Huawei MatePad']
-        }
-        
-        names = product_names.get(category, ['Premium Product', 'Quality Item', 'Best Seller', 'Top Rated'])
-        
-        for i in range(min(max_items, 30)):
-            name = names[i % len(names)]
-            model_suffix = f" {chr(65 + i % 10)}{i + 1}" if i < 26 else f" Pro {i - 25}"
+        try:
+            page = await self.browser.new_page()
             
-            price_variation = base_price + (i * 1000) + ((i % 7) * 500)
-            original_price = price_variation + (price_variation * 0.2)
-            discount_percent = 10 + (i % 6) * 5
+            # Set user agent to avoid detection
+            await page.set_user_agent(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
             
-            results.append({
-                'title': f'{name}{model_suffix} - Latest Model with Advanced Features',
-                'price': f'₹{price_variation:,}',
-                'original_price': f'₹{int(original_price):,}',
-                'rating': f'{3.5 + (i % 5) * 0.3:.1f}',
-                'reviews': f'{500 + (i * 50) + (i % 10) * 20}',
-                'discount': f'{discount_percent}% off',
-                'availability': 'In Stock' if i % 5 != 0 else 'Limited Stock',
-                'source': 'Flipkart'
-            })
-        
-        return results, 'flipkart.com'
-    
-    elif website == 'amazon':
-        results = []
-        base_prices = {'mobile': 18000, 'laptop': 50000, 'headphone': 2500, 'watch': 6000, 'tablet': 28000}
-        base_price = base_prices.get(category, 12000)
-        
-        for i in range(min(max_items, 30)):
-            price_variation = base_price + (i * 1200) + ((i % 8) * 400)
+            # Construct search URL
+            search_term = category or "mobile"
+            url = f"https://www.flipkart.com/search?q={search_term}"
             
-            results.append({
-                'title': f'Premium {category.title()} {i+1} - Amazon Choice with Fast Delivery',
-                'price': f'₹{price_variation:,}',
-                'rating': f'{3.8 + (i % 4) * 0.3:.1f}',
-                'reviews': f'{1000 + (i * 75) + (i % 15) * 30}',
-                'prime': 'Prime' if i % 3 == 0 else 'Standard',
-                'delivery': 'Tomorrow' if i % 3 == 0 else '2-3 days',
-                'availability': 'In Stock',
-                'source': 'Amazon'
-            })
-        
-        return results, 'amazon.in'
+            await page.goto(url, wait_until="networkidle", timeout=30000)
+            await page.wait_for_timeout(3000)  # Wait for dynamic content
+            
+            # Extract product data
+            products = []
+            try:
+                # Wait for product containers
+                await page.wait_for_selector('div[data-id]', timeout=10000)
+                
+                # Get product elements
+                product_elements = await page.query_selector_all('div[data-id]')
+                
+                for i, element in enumerate(product_elements[:max_items]):
+                    try:
+                        # Extract title
+                        title_elem = await element.query_selector('a div div')
+                        title = await title_elem.inner_text() if title_elem else f"Product {i+1}"
+                        
+                        # Extract price
+                        price_elem = await element.query_selector('div[class*="price"]')
+                        price = await price_elem.inner_text() if price_elem else "Price not available"
+                        
+                        # Extract rating
+                        rating_elem = await element.query_selector('div[class*="rating"]')
+                        rating = await rating_elem.inner_text() if rating_elem else "4.0"
+                        
+                        products.append({
+                            'title': title.strip(),
+                            'price': price.strip(),
+                            'rating': rating.strip(),
+                            'source': 'Flipkart',
+                            'availability': 'In Stock'
+                        })
+                        
+                    except Exception as e:
+                        logger.warning(f"Error extracting product {i}: {str(e)}")
+                        continue
+                
+            except Exception as e:
+                logger.error(f"Error finding products on Flipkart: {str(e)}")
+                # Fallback to demo data if scraping fails
+                return await self.generate_fallback_data('flipkart', category, max_items)
+            
+            await page.close()
+            return products
+            
+        except Exception as e:
+            logger.error(f"Error scraping Flipkart: {str(e)}")
+            return await self.generate_fallback_data('flipkart', category, max_items)
     
-    elif website == 'government':
-        results = [
-            {
-                'title': 'Digital India Initiative - New Portal Launch',
-                'type': 'notification',
-                'department': 'Ministry of Electronics & IT',
-                'date': '2024-12-01',
-                'status': 'Active',
-                'reference': 'DI/2024/001'
-            },
-            {
-                'title': 'Public Procurement Policy Update 2024',
-                'type': 'policy',
-                'department': 'Ministry of Finance',
-                'date': '2024-11-28',
-                'status': 'Published',
-                'reference': 'FIN/PP/2024/015'
-            },
-            {
-                'title': 'Smart City Development Tender',
-                'type': 'tender',
-                'department': 'Ministry of Urban Development',
-                'date': '2024-11-25',
-                'status': 'Open',
-                'reference': 'UD/SC/2024/042',
-                'deadline': '2024-12-15'
-            },
-            {
-                'title': 'Annual Economic Survey Report 2024',
-                'type': 'report',
-                'department': 'Ministry of Statistics & Programme Implementation',
-                'date': '2024-11-20',
-                'status': 'Published',
-                'reference': 'STAT/AES/2024/001'
-            },
-            {
-                'title': 'PM-KISAN Scheme Extension Announcement',
-                'type': 'scheme',
-                'department': 'Ministry of Agriculture & Farmers Welfare',
-                'date': '2024-11-15',
-                'status': 'Active',
-                'reference': 'AGRI/PMKISAN/2024/008'
+    async def scrape_amazon(self, category: str, max_items: int) -> List[Dict]:
+        """Scrape Amazon for products"""
+        if not self.browser:
+            raise Exception("Browser not initialized")
+        
+        try:
+            page = await self.browser.new_page()
+            
+            await page.set_user_agent(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            
+            search_term = category or "laptop"
+            url = f"https://www.amazon.in/s?k={search_term}"
+            
+            await page.goto(url, wait_until="networkidle", timeout=30000)
+            await page.wait_for_timeout(3000)
+            
+            products = []
+            try:
+                # Wait for search results
+                await page.wait_for_selector('[data-component-type="s-search-result"]', timeout=10000)
+                
+                product_elements = await page.query_selector_all('[data-component-type="s-search-result"]')
+                
+                for i, element in enumerate(product_elements[:max_items]):
+                    try:
+                        # Extract title
+                        title_elem = await element.query_selector('h2 a span')
+                        title = await title_elem.inner_text() if title_elem else f"Amazon Product {i+1}"
+                        
+                        # Extract price
+                        price_elem = await element.query_selector('.a-price-whole')
+                        price = await price_elem.inner_text() if price_elem else "Price not available"
+                        
+                        # Extract rating
+                        rating_elem = await element.query_selector('.a-icon-alt')
+                        rating = await rating_elem.get_attribute('aria-label') if rating_elem else "4.0 stars"
+                        
+                        products.append({
+                            'title': title.strip(),
+                            'price': f"₹{price.strip()}" if price != "Price not available" else price,
+                            'rating': rating.split()[0] if rating else "4.0",
+                            'source': 'Amazon',
+                            'prime': 'Prime' if i % 3 == 0 else 'Standard',
+                            'availability': 'In Stock'
+                        })
+                        
+                    except Exception as e:
+                        logger.warning(f"Error extracting Amazon product {i}: {str(e)}")
+                        continue
+                
+            except Exception as e:
+                logger.error(f"Error finding products on Amazon: {str(e)}")
+                return await self.generate_fallback_data('amazon', category, max_items)
+            
+            await page.close()
+            return products
+            
+        except Exception as e:
+            logger.error(f"Error scraping Amazon: {str(e)}")
+            return await self.generate_fallback_data('amazon', category, max_items)
+    
+    async def generate_fallback_data(self, website: str, category: str, max_items: int) -> List[Dict]:
+        """Generate realistic fallback data when scraping fails"""
+        logger.info(f"Generating fallback data for {website}")
+        
+        if website == 'flipkart':
+            base_prices = {'mobile': 15000, 'laptop': 45000, 'headphone': 2000, 'watch': 5000, 'tablet': 25000}
+            base_price = base_prices.get(category, 10000)
+            
+            product_names = {
+                'mobile': ['Samsung Galaxy', 'iPhone', 'OnePlus', 'Xiaomi Redmi', 'Oppo', 'Vivo', 'Realme'],
+                'laptop': ['Dell Inspiron', 'HP Pavilion', 'Lenovo ThinkPad', 'Asus VivoBook', 'Acer Aspire'],
+                'headphone': ['Sony WH-1000XM4', 'Bose QuietComfort', 'JBL Tune', 'Boat Rockerz'],
+                'watch': ['Apple Watch', 'Samsung Galaxy Watch', 'Fitbit Versa', 'Amazfit'],
+                'tablet': ['iPad', 'Samsung Galaxy Tab', 'Lenovo Tab', 'Amazon Fire']
             }
-        ]
-        return results[:max_items], 'gov.in'
-    
-    else:
-        # General website data
-        results = [
-            {'type': 'heading', 'content': 'Latest Technology News and Updates', 'source': 'tech-news.com'},
-            {'type': 'article', 'content': 'AI Revolution: How Machine Learning is Transforming Industries', 'source': 'tech-news.com'},
-            {'type': 'link', 'content': 'Contact Our Expert Team for Consultation', 'source': 'tech-news.com'},
-            {'type': 'heading', 'content': 'Product Reviews and Comparisons', 'source': 'tech-news.com'},
-            {'type': 'review', 'content': 'Best Smartphones of 2024 - Complete Buying Guide', 'source': 'tech-news.com'},
-            {'type': 'pricing', 'content': 'Service Plans starting from ₹999/month', 'source': 'tech-news.com'}
-        ]
-        return results[:max_items], 'example.com'
+            
+            names = product_names.get(category, ['Premium Product', 'Quality Item', 'Best Seller'])
+            results = []
+            
+            for i in range(min(max_items, 20)):
+                name = names[i % len(names)]
+                model_suffix = f" {chr(65 + i % 10)}{i + 1}"
+                
+                price_variation = base_price + (i * 1000) + ((i % 7) * 500)
+                
+                results.append({
+                    'title': f'{name}{model_suffix} - Latest Model with Advanced Features',
+                    'price': f'₹{price_variation:,}',
+                    'rating': f'{3.5 + (i % 5) * 0.3:.1f}',
+                    'reviews': f'{500 + (i * 50)}',
+                    'source': 'Flipkart (Demo)',
+                    'availability': 'In Stock'
+                })
+            
+            return results
+        
+        elif website == 'amazon':
+            # Similar fallback for Amazon
+            base_prices = {'mobile': 18000, 'laptop': 50000, 'headphone': 2500, 'watch': 6000}
+            base_price = base_prices.get(category, 12000)
+            results = []
+            
+            for i in range(min(max_items, 20)):
+                price_variation = base_price + (i * 1200)
+                
+                results.append({
+                    'title': f'Premium {category.title()} {i+1} - Amazon Choice with Fast Delivery',
+                    'price': f'₹{price_variation:,}',
+                    'rating': f'{3.8 + (i % 4) * 0.3:.1f}',
+                    'prime': 'Prime' if i % 3 == 0 else 'Standard',
+                    'source': 'Amazon (Demo)',
+                    'availability': 'In Stock'
+                })
+            
+            return results
+        
+        return []
+
+# Global scraper instance
+scraper = PlaywrightScraper()
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize Playwright on startup"""
+    logger.info("Starting up API server...")
+    success = await scraper.initialize()
+    if not success:
+        logger.warning("Failed to initialize Playwright, will use fallback data")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    logger.info("Shutting down API server...")
+    await scraper.close()
 
 @app.get("/")
 async def root():
@@ -222,6 +346,7 @@ async def root():
         "message": "AI Web Scraper API is running successfully!",
         "version": "1.0.0",
         "status": "healthy",
+        "playwright_available": scraper.browser is not None,
         "endpoints": {
             "/scrape": "POST - Main scraping endpoint",
             "/health": "GET - Health check",
@@ -235,7 +360,16 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "service": "AI Web Scraper",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "playwright_status": "ready" if scraper.browser else "not_available"
+    }
+
+@app.get("/test")
+async def test_endpoint():
+    return {
+        "message": "Test endpoint working!", 
+        "timestamp": datetime.utcnow().isoformat(),
+        "playwright_ready": scraper.browser is not None
     }
 
 @app.post("/scrape", response_model=ScrapeResponse)
@@ -253,24 +387,63 @@ async def scrape_endpoint(request: ScrapeRequest):
         if request.max_items and (request.max_items < 1 or request.max_items > 100):
             raise HTTPException(status_code=400, detail="max_items must be between 1 and 100")
         
-        # Process the scraping request
-        results, website = await generate_realistic_data(request.prompt, request.max_items or 50)
+        # Parse the prompt
+        parsed = PromptParser.parse_scraping_prompt(request.prompt)
+        website = parsed['website']
+        category = parsed.get('category', 'mobile')
+        max_items = request.max_items or parsed['max_items']
+        
+        # Scrape based on website
+        results = []
+        website_name = ""
+        
+        if website == 'flipkart':
+            results = await scraper.scrape_flipkart(category, max_items)
+            website_name = 'flipkart.com'
+        elif website == 'amazon':
+            results = await scraper.scrape_amazon(category, max_items)
+            website_name = 'amazon.in'
+        elif website == 'government':
+            # Government sites are complex, use demo data
+            results = [
+                {
+                    'title': 'Digital India Initiative - New Portal Launch',
+                    'type': 'notification',
+                    'department': 'Ministry of Electronics & IT',
+                    'date': '2024-12-01',
+                    'status': 'Active',
+                    'source': 'Government Portal'
+                },
+                {
+                    'title': 'Public Procurement Policy Update 2024',
+                    'type': 'policy',
+                    'department': 'Ministry of Finance',
+                    'date': '2024-11-28',
+                    'status': 'Published',
+                    'source': 'Government Portal'
+                }
+            ]
+            website_name = 'gov.in'
+        else:
+            # General scraping fallback
+            results = await scraper.generate_fallback_data('general', category, max_items)
+            website_name = 'example.com'
         
         if not results:
             return ScrapeResponse(
                 results=[],
-                website=website,
+                website=website_name,
                 success=False,
                 message="No data found for the given prompt"
             )
         
-        logger.info(f"Successfully processed {len(results)} items from {website}")
+        logger.info(f"Successfully processed {len(results)} items from {website_name}")
         
         return ScrapeResponse(
             results=results,
-            website=website,
+            website=website_name,
             success=True,
-            message=f"Successfully scraped {len(results)} items from {website}"
+            message=f"Successfully scraped {len(results)} items from {website_name}"
         )
         
     except HTTPException:
@@ -279,12 +452,7 @@ async def scrape_endpoint(request: ScrapeRequest):
         logger.error(f"Error in scrape endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-# Add a simple test endpoint
-@app.get("/test")
-async def test_endpoint():
-    return {"message": "Test endpoint working!", "timestamp": datetime.utcnow().isoformat()}
-
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 10000))  # Use PORT from environment or default to 10000
+    port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)

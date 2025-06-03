@@ -16,7 +16,8 @@ data/scrape_log.json
 __pycache__/
 *.py[cod]
 *$py.class
-
+run_oce.py
+tester.py
 # C extensions
 *.so
 

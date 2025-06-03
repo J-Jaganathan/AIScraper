@@ -84,6 +84,22 @@ def check_backend_health() -> bool:
         return False
 
 
+def safe_json_parse(response):
+    """Safely parse JSON response with fallback error handling"""
+    try:
+        return response.json()
+    except ValueError as e:
+        # Response is not valid JSON - likely HTML error page
+        st.error(f"🔧 Backend returned invalid response format. Status: {response.status_code}")
+        st.error(f"Response preview: {response.text[:200]}...")
+        return {
+            "success": False,
+            "message": f"Invalid JSON response from backend (Status: {response.status_code})",
+            "results": [],
+            "website": "error"
+        }
+
+
 def scrape_data(prompt: str) -> Tuple[List[Dict], str]:
     """
     Scrape data by calling the FastAPI backend instead of using Playwright directly.
@@ -96,19 +112,28 @@ def scrape_data(prompt: str) -> Tuple[List[Dict], str]:
         Tuple of (results_list, website_name)
     """
     
-    # Check rate limiting BEFORE attempting to scrape
+    # Input validation
+    if not prompt or not prompt.strip():
+        st.error("❌ Please enter a valid scraping request.")
+        return [], 'invalid_input'
+    
+    if len(prompt.strip()) < 5:
+        st.error("❌ Scraping request is too short. Please be more specific.")
+        return [], 'invalid_input'
+    
+    # Check authentication
     if 'user' not in st.session_state or not st.session_state.user:
         st.error("❌ Authentication required for scraping.")
-        return [], 'error'
+        return [], 'auth_error'
     
     username = st.session_state.user.get('username', '')
     is_admin = st.session_state.user.get('is_admin', False)
     
     if not username:
         st.error("❌ Invalid user session.")
-        return [], 'error'
+        return [], 'auth_error'
     
-    # Check scrape limit
+    # Check scrape limit BEFORE attempting to scrape
     if not check_and_update_scrape_limit(username, is_admin):
         st.error("🚫 Daily scrape limit (5) exceeded. Try again tomorrow or contact admin for upgrade.")
         return [], 'limit_exceeded'
@@ -116,63 +141,121 @@ def scrape_data(prompt: str) -> Tuple[List[Dict], str]:
     # Check if backend is healthy
     if not check_backend_health():
         st.error("🔌 Scraping service is currently unavailable. Please try again later.")
+        st.info("💡 Tip: If you're running locally, make sure your FastAPI server is running on port 8000")
         return [], 'service_unavailable'
     
     try:
-        # Prepare request payload
+        # Prepare request payload - match exactly what tester.py sends
         payload = {
-            "prompt": prompt,
+            "prompt": prompt.strip(),
             "max_items": 50  # Default max items
         }
+        
+        # Debug log
+        st.info(f"🔄 Sending request to: {BACKEND_URL}/scrape")
         
         # Make request to FastAPI backend
         response = requests.post(
             f"{BACKEND_URL}/scrape",
             json=payload,
             timeout=120,  # 2 minutes timeout for scraping
-            headers={"Content-Type": "application/json"}
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
         )
         
+        # Debug response
+        st.info(f"📡 Response status: {response.status_code}")
+        
+        # Parse response safely
         if response.status_code == 200:
-            data = response.json()
+            data = safe_json_parse(response)
             
+            # Handle the response format from your FastAPI
             if data.get("success", False):
                 results = data.get("results", [])
                 website = data.get("website", "unknown")
+                message = data.get("message", "Scraping completed successfully!")
                 
-                # Log successful scrape
-                st.success(f"✅ {data.get('message', 'Scraping completed successfully!')}")
+                # Validate results structure
+                if not isinstance(results, list):
+                    st.error("❌ Backend returned invalid results format")
+                    return [], 'format_error'
                 
-                return results, website
+                # Filter out any error entries
+                valid_results = []
+                for result in results:
+                    if isinstance(result, dict) and 'error' not in result:
+                        valid_results.append(result)
+                
+                if valid_results:
+                    st.success(f"✅ {message}")
+                    st.info(f"📊 Found {len(valid_results)} records from {website}")
+                    return valid_results, website
+                else:
+                    st.warning("⚠️ No valid results found in response")
+                    return [], website
+            
             else:
-                # Backend returned error
+                # Backend returned error in success=False format
                 error_msg = data.get("message", "Unknown error occurred")
                 st.error(f"❌ Scraping failed: {error_msg}")
                 return [], 'backend_error'
         
         elif response.status_code == 400:
-            # Bad request
-            error_detail = response.json().get("detail", "Invalid request")
+            # Bad request - try to parse error details
+            try:
+                error_data = safe_json_parse(response)
+                error_detail = error_data.get("detail", "Invalid request")
+            except:
+                error_detail = "Invalid request format"
+            
             st.error(f"❌ Invalid request: {error_detail}")
             return [], 'bad_request'
         
+        elif response.status_code == 422:
+            # Validation error
+            try:
+                error_data = safe_json_parse(response)
+                error_detail = error_data.get("detail", "Validation error")
+                if isinstance(error_detail, list) and len(error_detail) > 0:
+                    error_detail = error_detail[0].get("msg", "Validation error")
+            except:
+                error_detail = "Request validation failed"
+            
+            st.error(f"❌ Validation error: {error_detail}")
+            return [], 'validation_error'
+        
         elif response.status_code == 500:
             # Internal server error
-            error_detail = response.json().get("detail", "Internal server error")
+            try:
+                error_data = safe_json_parse(response)
+                error_detail = error_data.get("detail", "Internal server error")
+            except:
+                error_detail = "Internal server error"
+            
             st.error(f"❌ Server error: {error_detail}")
+            st.info("💡 This might be a temporary issue. Please try again in a moment.")
             return [], 'server_error'
         
         else:
             # Other HTTP errors
             st.error(f"❌ Request failed with status code: {response.status_code}")
+            st.error(f"Response: {response.text[:200]}")
             return [], 'http_error'
     
     except requests.Timeout:
         st.error("⏱️ Request timed out. The website might be taking too long to respond.")
+        st.info("💡 Try again with a simpler request or fewer items.")
         return [], 'timeout'
     
     except requests.ConnectionError:
-        st.error("🔌 Could not connect to scraping service. Please check your internet connection.")
+        st.error("🔌 Could not connect to scraping service.")
+        st.info("💡 Please check:")
+        st.info("   • Your internet connection")
+        st.info("   • That the backend server is running")
+        st.info(f"   • Backend URL is correct: {BACKEND_URL}")
         return [], 'connection_error'
     
     except requests.RequestException as e:
@@ -181,6 +264,7 @@ def scrape_data(prompt: str) -> Tuple[List[Dict], str]:
     
     except Exception as e:
         st.error(f"❌ Unexpected error: {str(e)}")
+        st.info("💡 Please try again or contact support if the issue persists.")
         return [], 'unexpected_error'
 
 
@@ -189,45 +273,54 @@ def get_scraping_status_message(status_code: str) -> str:
     Get user-friendly message for scraping status codes
     """
     status_messages = {
-        'error': 'Authentication or session error',
+        'invalid_input': 'Invalid or empty scraping request',
+        'auth_error': 'Authentication or session error',
         'limit_exceeded': 'Daily scraping limit exceeded',
         'service_unavailable': 'Scraping service unavailable',
         'backend_error': 'Backend processing error',
         'bad_request': 'Invalid scraping request',
+        'validation_error': 'Request validation failed',
         'server_error': 'Internal server error',
         'http_error': 'HTTP communication error',
         'timeout': 'Request timeout',
         'connection_error': 'Connection error',
         'request_error': 'Request processing error',
-        'unexpected_error': 'Unexpected error occurred'
+        'unexpected_error': 'Unexpected error occurred',
+        'format_error': 'Invalid response format'
     }
     
     return status_messages.get(status_code, 'Unknown error')
 
 
-def validate_scraping_prompt(prompt: str) -> bool:
+def validate_scraping_prompt(prompt: str) -> Tuple[bool, str]:
     """
     Validate if the scraping prompt is reasonable
+    Returns (is_valid, error_message)
     """
     if not prompt or not prompt.strip():
-        return False
+        return False, "Prompt cannot be empty"
     
     # Check minimum length
     if len(prompt.strip()) < 10:
-        return False
+        return False, "Prompt is too short. Please provide more details."
+    
+    # Check maximum length
+    if len(prompt.strip()) > 500:
+        return False, "Prompt is too long. Please keep it under 500 characters."
     
     # Check for potentially harmful requests
     harmful_keywords = [
         'hack', 'attack', 'exploit', 'password', 'credential',
-        'private', 'personal', 'confidential', 'bank', 'payment'
+        'private', 'personal', 'confidential', 'bank', 'payment',
+        'login', 'admin', 'root', 'database'
     ]
     
     prompt_lower = prompt.lower()
     for keyword in harmful_keywords:
         if keyword in prompt_lower:
-            return False
+            return False, f"Request contains potentially harmful keyword: '{keyword}'"
     
-    return True
+    return True, ""
 
 
 def estimate_scraping_time(prompt: str) -> int:
@@ -251,3 +344,14 @@ def estimate_scraping_time(prompt: str) -> int:
         base_time += min(num_items // 10, 30)  # Cap at 30 extra seconds
     
     return base_time
+
+
+def get_example_prompts() -> List[str]:
+    """Get list of example prompts for users"""
+    return [
+        "Get 20 mobile phones from Flipkart with price and rating",
+        "Scrape 15 laptops from Amazon with specifications",
+        "Find 10 headphones from Flipkart with discount information",
+        "Get government notifications from ministry portal",
+        "Extract 25 electronic products with price comparison"
+    ]

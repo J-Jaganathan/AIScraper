@@ -1577,12 +1577,12 @@ class WebScrapingAPI:
 
 
 # Initialize FastAPI application
-api = WebScrapingAPI().app
+app = WebScrapingAPI().app
 
 # Add CORS middleware for frontend integration
 from fastapi.middleware.cors import CORSMiddleware
 
-api.add_middleware(
+app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure appropriately for production
     allow_credentials=True,
@@ -1594,7 +1594,7 @@ api.add_middleware(
 from fastapi import Request
 import time
 
-@api.middleware("http")
+@app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     
@@ -1613,7 +1613,7 @@ async def log_requests(request: Request, call_next):
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-@api.exception_handler(HTTPException)
+@app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
@@ -1624,7 +1624,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         }
     )
 
-@api.exception_handler(Exception)
+@app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {str(exc)}")
     return JSONResponse(
@@ -1637,7 +1637,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 # Startup and shutdown events
-@api.on_event("startup")
+@app.on_event("startup")
 async def startup_event():
     logger.info("🚀 Intelligent Web Scraper API starting up...")
     logger.info("✅ StealthScraper initialized")
@@ -1645,7 +1645,7 @@ async def startup_event():
     logger.info("✅ All endpoints configured")
     logger.info("🌐 API is ready to accept requests")
 
-@api.on_event("shutdown")
+@app.on_event("shutdown")
 async def shutdown_event():
     logger.info("🛑 Intelligent Web Scraper API shutting down...")
     logger.info("✅ Cleanup completed")
